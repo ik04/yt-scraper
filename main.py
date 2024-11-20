@@ -1,9 +1,9 @@
 import os
 import argparse
-from pytubefix import YouTube
-from pytubefix.cli import on_progress
+import yt_dlp
 from moviepy.editor import AudioFileClip
 
+# Argument parser setup
 parser = argparse.ArgumentParser(description="Download YouTube audio and convert to MP3.")
 parser.add_argument("url", help="YouTube video URL")
 parser.add_argument("output_dir", help="Directory to save the MP3 file")
@@ -13,24 +13,25 @@ args = parser.parse_args()
 url = args.url
 output_dir = args.output_dir
 
-yt = YouTube(url, on_progress_callback=on_progress)
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
-print(f"Title: {yt.title}")
+# yt-dlp options
+ydl_opts = {
+    "format": "bestaudio/best",
+    "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
+    "postprocessors": [{
+        "key": "FFmpegExtractAudio",
+        "preferredcodec": "mp3",
+        "preferredquality": "192",
+    }],
+}
 
-audio_stream = yt.streams.filter(only_audio=True).first()
+print("Downloading and converting to MP3...")
 
-if audio_stream:
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    
-    temp_audio_file = audio_stream.download(output_path=output_dir)
-    mp3_file = temp_audio_file.replace(".mp4", ".mp3").replace(".webm", ".mp3")
-
-    print("Converting to MP3...")
-    audio_clip = AudioFileClip(temp_audio_file)
-    audio_clip.write_audiofile(mp3_file)
-    audio_clip.close()
-    os.remove(temp_audio_file)
-    print(f"Audio download and conversion complete! MP3 saved at {mp3_file}")
-else:
-    print("No audio stream available.")
+try:
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.extract_info(url, download=True)
+        print(f"Audio download and conversion complete! MP3 saved at {os.path.join(output_dir, result['title'] + '.mp3')}")
+except Exception as e:
+    print(f"An error occurred: {e}")
